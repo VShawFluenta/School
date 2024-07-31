@@ -38,6 +38,7 @@ Figure out how the heck to access a file
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <string.h>
 
 int inTestingMode =0; 
 
@@ -198,12 +199,18 @@ int countFiles(struct DirectoryEntry *dir, uint32_t dirSize, FILE *fp, struct Bo
 //Takes the location of the FAT and determines how many free clusters there are 
 uint32_t countFreeClusters(uint8_t *fat, uint32_t totalClusters) {
     uint32_t freeClusters = 0;
-    for (uint32_t i = 2; i < totalClusters + 2; i++) { // FAT12 cluster numbering starts at 2
+    for (uint32_t i = 2; i < totalClusters + 2; i++) { // FAT12 cluster numbering starts at 2, so we need to go to a higher value, 
+    //(because we start at i =2, there are the same amout of opperations)
         uint16_t entry;
-        if (i % 2 == 0) {
-            entry = (fat[i + i / 2] | (fat[i + i / 2 + 1] & 0x0F) << 8);
+        if (i % 2 == 0) {//if i is even, then we need to effectivly add (using or |, since there should be no overlap) 
+        /*there are 1.5 the amount of indicies compared to actual 8 bit bytes so for even numbers, we take 1.5* i (= 1+i/2 to get an integer) for 
+        the first part, which is the whole byte we need, then we take the next half byte. 
+        if we are looking for cluster 4, then we consider */
+            entry = (fat[i + i / 2] | ((fat[i + i / 2 + 1] & 0x0F/*only consider the second half (the most significant bits)*/) << 8)); //shifting to 
+            //turn 8 biy bytes into a 12 bit thing but putting it at the beginning, which makes it into the least significant byte in little Endian. 
+            //This algo seems wrong, like it would put things in the wrong order, but it seems to work. 
         } else {
-            entry = ((fat[i + i / 2] >> 4) | (fat[i + i / 2 + 1] << 4));
+            entry = ((fat[i + i / 2] >> 4) /*shift this right by 4, removing the right 4 bits*/| (fat[i + i / 2 + 1] << 4)/*take the whole next byte, and move it left to make space for the half byte*/);
         }
         if (entry == 0x000) {
             ++freeClusters;
@@ -212,12 +219,32 @@ uint32_t countFreeClusters(uint8_t *fat, uint32_t totalClusters) {
     return freeClusters;
 }
 
+void findAndPrintDiskLabel(struct BootSector* bootSector, struct DirectoryEntry *rootDir ){
+    char volumeLabel[12]; // 11 bytes for label + 1 for null terminator
+    int found = 0;
+
+    for (uint32_t i = 0; i < bootSector->BPB_RootEntCnt; i++) {
+        if (rootDir[i].DIR_Attr == 0x08) { // Attribute for volume label
+            memcpy(volumeLabel, rootDir[i].DIR_Name, 11);
+            volumeLabel[11] = '\0'; // Null-terminate the string
+            found = 1;
+            break;
+        }
+    }
+    if (found) {
+        printf(" [%s]\n", volumeLabel);
+    } else {
+        printf("Volume Label not found in root directory\n");
+    }
+
+}
+
 
 
 //for testing only? Maaaaaaybe combine into one main that will control other things?? No idea how to use the make file to compile into 4. 
 int main(int argc, char *argv[]) {
 
-                                                            inTestingMode =1; 
+                                                            // inTestingMode =1; 
 
 
 
@@ -313,9 +340,10 @@ uint32_t freeClusters = countFreeClusters(fat, totalClusters);
     }
 
 
-    printf("Lable of this disk: "); PrintArray(bootSector.VolumeLable,11);//FIND IN ROOT DIR TODO NOT CURRENTLY CORRECT!!
+    printf("Lable of this disk: "); findAndPrintDiskLabel(&bootSector, rootDir);
+    // PrintArray(bootSector.VolumeLable,11);//FIND IN ROOT DIR TODO NOT CURRENTLY CORRECT!!
     if(inTestingMode){ 
-        printf("Volume Label: [%.11s]\n", bootSector.VolumeLable);
+        printf("Volume Label from boot sector is: [%.11s]\n", bootSector.VolumeLable);
     }
     uint32_t totalsectors = bootSector.BPB_TotSec16 != 0 ? bootSector.BPB_TotSec16 : bootSector.BPB_TotSec32;
 
