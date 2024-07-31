@@ -129,37 +129,60 @@ void PrintArray(uint8_t array[], int n){
     printf("[%s]\n",string); 
 }
 
-
+//Basic algo: if the "file" in the directory is not a directory, then determine 
 int countFiles(struct DirectoryEntry *dir, uint32_t dirSize, FILE *fp, struct BootSector *bootSector, uint8_t *fat) {
-    int fileCount = 0;
+// bootSector.FileCount =0; 
     for (uint32_t i = 0; i < dirSize / sizeof(struct DirectoryEntry); ++i) {
+        if(inTestingMode){
+        printf("This is iteration %d of the count files function\n", i);//Note this is currently infinite. 
+        printf("The Directory Entry name under inspection is %02X\n", dir[i].DIR_Name[0]);
+        }
         if (dir[i].DIR_Name[0] == 0x00) {
-            break;  // No more entries in this directory
+            if(inTestingMode){
+                printf("No more entries in this directory\n");
+            }
+            break;  // No more entries in this directory. COULD THIS BE REPLACED BY RETURN FOR CLARITY??
+
         }
         if (dir[i].DIR_Name[0] == 0xE5) {
+            if(inTestingMode){
+                printf("Deleted entry\n");
+            }
             continue;  // Deleted entry
         }
         if ((dir[i].DIR_Attr & 0x0F) == 0x0F) {
+            if(inTestingMode){
+                printf("Long file name entry\n");
+            }
             continue;  // Long file name entry
         }
-        if (dir[i].DIR_Attr & 0x10) {
+        if ((dir[i].DIR_Attr & 0x10 )== 0x10) {
             // Subdirectory, recursively count files
             uint16_t firstCluster = dir[i].DIR_FstClusLO;
             if (firstCluster == 0) {
                 continue;
             }
-            // Read subdirectory entries
+            if(inTestingMode){
+                printf("Found a subdirectory\n");//Note this is currently infinite. 
+            }
+
+            //Note to self, the first cluster is the location of the first part of this file. I think
+            // Read subdirectory entries. We need to change the directory we are considering to be the newly discovered subdirectory. 
+            //The location of the start of the new subdir is (num sectors leading up to the subdir)*num bytes in each sector. 
+            //num sectors is: all the sectos of the FAT Table, The location of the first cluster of the subdir (this is the important part) Note to self this is two less because reasnons I can't remember. 
+            //+ 
             uint32_t subDirOffset = ((firstCluster - 2) * bootSector->BPB_SecPerClus + bootSector->BPB_RsvdSecCnt + bootSector->BPB_NumFATs * bootSector->BPB_FATSz16 + bootSector->BPB_RootEntCnt * sizeof(struct DirectoryEntry) / bootSector->BPB_BytsPerSec) * bootSector->BPB_BytsPerSec;
             struct DirectoryEntry *subDir = malloc(bootSector->BPB_SecPerClus * bootSector->BPB_BytsPerSec);
             fseek(fp, subDirOffset, SEEK_SET);
             fread(subDir, bootSector->BPB_SecPerClus * bootSector->BPB_BytsPerSec, 1, fp);
-            fileCount += countFiles(subDir, bootSector->BPB_SecPerClus * bootSector->BPB_BytsPerSec, fp, bootSector, fat);
+            bootSector->FileCount += countFiles(subDir, bootSector->BPB_SecPerClus * bootSector->BPB_BytsPerSec, fp, bootSector, fat);
             free(subDir);
         } else {
-            ++fileCount;
+            bootSector->FileCount++;
         }
+        // bootSector->FileCount++;
     }
-    return fileCount;
+    return bootSector->FileCount;
 }
 
 
@@ -267,14 +290,14 @@ int main(int argc, char *argv[]) {
         printf("Calculates number of files and there are %d\n", bootSector.FileCount);
     }
    
-    printf("This OS is: "); PrintArray(bootSector.FileSystemType,8);
+    printf("This OS is: "); PrintArray(bootSector.BS_OEMName,8);
     if(inTestingMode){ 
     printf("The boot signature is 0x%02X \n", bootSector.Boot_Signature);
         printf("The bytes per sector is  %d \n", bootSector.BPB_BytsPerSec);
     }
 
 
-    printf("Lable of this disk: "); PrintArray(bootSector.VolumeLable,11);//MUST ADD CHECKING THAT THIS EXISTS!!
+    printf("Lable of this disk: "); PrintArray(bootSector.VolumeLable,11);//FIND IN ROOT DIR TODO NOT CURRENTLY CORRECT!!
     if(inTestingMode){ 
         printf("Volume Label: [%.11s]\n", bootSector.VolumeLable);
     }
