@@ -86,18 +86,25 @@ void readRootDirectory(FILE *fp, struct BootSector *bootSector, struct Directory
     fread(rootDir, sizeof(struct DirectoryEntry), bootSector->BPB_RootEntCnt, fp);
 }
 
-int main() {
-    FILE *fp = fopen("disk_image.ima", "rb");
-    if (!fp) {
+
+//for testing only? Maaaaaaybe combine into one main that will control other things?? No idea how to use the make file to compile into 4. 
+int main(int argc, char *argv[]) {
+    if (argc != 2) {
+        fprintf(stderr, "Usage: %s <IMA file>\n", argv[0]);
+        return 1;
+    }
+
+    FILE *pointerToFile = fopen(argv[1], "rb");
+    if (!pointerToFile) {
         perror("Failed to open disk image");
         return 1;
     }
 
     struct BootSector bootSector;
-    readBootSector(fp, &bootSector);
+    readBootSector(pointerToFile, &bootSector);
 
     struct DirectoryEntry *rootDir = malloc(bootSector.BPB_RootEntCnt * sizeof(struct DirectoryEntry));
-    readRootDirectory(fp, &bootSector, rootDir);
+    readRootDirectory(pointerToFile, &bootSector, rootDir);
 
     for (int i = 0; i < bootSector.BPB_RootEntCnt; i++) {
         if (rootDir[i].DIR_Name[0] == 0x00) {
@@ -110,7 +117,7 @@ int main() {
     }
 
     free(rootDir);
-    fclose(fp);
+    fclose(pointerToFile);
 
     return 0;
 }
