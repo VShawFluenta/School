@@ -129,13 +129,15 @@ void PrintArray(uint8_t array[], int n){
     printf("[%s]\n",string); 
 }
 
-//Basic algo: if the "file" in the directory is not a directory, then determine 
+//Basic algo: if the "file" in the directory is not a directory, then determine whether it is a file. If it is a subdirectory, call count files on that subdirectory. 
+//Need  a way to not flag the folder above itself or itself as subdirectories so we don't call them infinetely
 int countFiles(struct DirectoryEntry *dir, uint32_t dirSize, FILE *fp, struct BootSector *bootSector, uint8_t *fat) {
 // bootSector.FileCount =0; 
     for (uint32_t i = 0; i < dirSize / sizeof(struct DirectoryEntry); ++i) {
         if(inTestingMode){
         printf("This is iteration %d of the count files function\n", i);//Note this is currently infinite. 
-        printf("The Directory Entry name under inspection is %02X\n", dir[i].DIR_Name[0]);
+        printf("The Directory Entry name under inspection is ");
+        PrintFileName( dir[i].DIR_Name); 
         }
         if (dir[i].DIR_Name[0] == 0x00) {
             if(inTestingMode){
@@ -156,14 +158,20 @@ int countFiles(struct DirectoryEntry *dir, uint32_t dirSize, FILE *fp, struct Bo
             }
             continue;  // Long file name entry
         }
-        if ((dir[i].DIR_Attr & 0x10 )== 0x10) {
+        if ((dir[i].DIR_Attr & 0x10 )== 0x10 ) {
+            if(dir[i].DIR_Name[0] !=0x2E){
+                if(inTestingMode){
+                printf("Found self directory or parent directory. Don't count this\n");
+                }
+                continue; 
+            }
             // Subdirectory, recursively count files
             uint16_t firstCluster = dir[i].DIR_FstClusLO;
             if (firstCluster == 0) {
                 continue;
             }
             if(inTestingMode){
-                printf("Found a subdirectory\n");//Note this is currently infinite. 
+                printf("Found a subdirectory\n");//Note this is currently infinite. Haha! Not it is not and it works!! (ish) 
             }
 
             //Note to self, the first cluster is the location of the first part of this file. I think
@@ -171,7 +179,7 @@ int countFiles(struct DirectoryEntry *dir, uint32_t dirSize, FILE *fp, struct Bo
             //The location of the start of the new subdir is (num sectors leading up to the subdir)*num bytes in each sector. 
             //num sectors is: all the sectos of the FAT Table, The location of the first cluster of the subdir (this is the important part) Note to self this is two less because reasnons I can't remember. 
             //+ 
-            uint32_t subDirOffset = ((firstCluster - 2) * bootSector->BPB_SecPerClus + bootSector->BPB_RsvdSecCnt + bootSector->BPB_NumFATs * bootSector->BPB_FATSz16 + bootSector->BPB_RootEntCnt * sizeof(struct DirectoryEntry) / bootSector->BPB_BytsPerSec) * bootSector->BPB_BytsPerSec;
+            uint32_t subDirOffset = ((firstCluster - 2) * bootSector->BPB_SecPerClus + bootSector->BPB_RsvdSecCnt + bootSector->BPB_NumFATs * bootSector->BPB_FATSz16 /*Sectors per fat*num fats*/ + bootSector->BPB_RootEntCnt /*entries in root dir*/ * sizeof(struct DirectoryEntry) / bootSector->BPB_BytsPerSec) * bootSector->BPB_BytsPerSec;
             struct DirectoryEntry *subDir = malloc(bootSector->BPB_SecPerClus * bootSector->BPB_BytsPerSec);
             fseek(fp, subDirOffset, SEEK_SET);
             fread(subDir, bootSector->BPB_SecPerClus * bootSector->BPB_BytsPerSec, 1, fp);
@@ -187,15 +195,15 @@ int countFiles(struct DirectoryEntry *dir, uint32_t dirSize, FILE *fp, struct Bo
 
 
 
-
-uint32_t countFreeClusters(uint8_t *fat, uint32_t fatSize) {
+//Takes the location of the FAT and determines how many free clusters there are 
+uint32_t countFreeClusters(uint8_t *fat, uint32_t totalClusters) {
     uint32_t freeClusters = 0;
-    for (uint32_t i = 0; i < fatSize * 2 / 3; i++) {
+    for (uint32_t i = 2; i < totalClusters + 2; i++) { // FAT12 cluster numbering starts at 2
         uint16_t entry;
         if (i % 2 == 0) {
             entry = (fat[i + i / 2] | (fat[i + i / 2 + 1] & 0x0F) << 8);
         } else {
-            entry = ((fat[i + i / 2] >> 4) | fat[i + i / 2 + 1] << 4);
+            entry = ((fat[i + i / 2] >> 4) | (fat[i + i / 2 + 1] << 4));
         }
         if (entry == 0x000) {
             ++freeClusters;
@@ -205,10 +213,14 @@ uint32_t countFreeClusters(uint8_t *fat, uint32_t fatSize) {
 }
 
 
+
 //for testing only? Maaaaaaybe combine into one main that will control other things?? No idea how to use the make file to compile into 4. 
 int main(int argc, char *argv[]) {
 
-     inTestingMode =1; 
+                                                            inTestingMode =1; 
+
+
+
     if(inTestingMode){
         printf("In testing mode\n\n");
     }
@@ -275,8 +287,12 @@ int main(int argc, char *argv[]) {
 
     uint8_t *fat;
     readFAT(pointerToFile, &bootSector, &fat);
+    uint32_t totalSectors = (bootSector.BPB_TotSec16 != 0) ? bootSector.BPB_TotSec16 : bootSector.BPB_TotSec32;
     uint32_t fatSize = bootSector.BPB_FATSz16 * bootSector.BPB_BytsPerSec;
-    uint32_t freeClusters = countFreeClusters(fat, fatSize);
+    uint32_t rootDirSectors = ((bootSector.BPB_RootEntCnt * 32) + (bootSector.BPB_BytsPerSec - 1)) / bootSector.BPB_BytsPerSec;
+uint32_t dataSectors = totalSectors - (bootSector.BPB_RsvdSecCnt + (bootSector.BPB_NumFATs * bootSector.BPB_FATSz16) + rootDirSectors);
+uint32_t totalClusters = dataSectors / bootSector.BPB_SecPerClus;
+uint32_t freeClusters = countFreeClusters(fat, totalClusters);
     uint32_t freeSpace = freeClusters * bootSector.BPB_SecPerClus * bootSector.BPB_BytsPerSec;
 
     if(inTestingMode){
@@ -306,7 +322,7 @@ int main(int argc, char *argv[]) {
     printf("Total size of the disk: %d bytes = %d*%d\n",bootSector.BPB_BytsPerSec*totalsectors,bootSector.BPB_BytsPerSec,totalsectors);
     printf("Free size of the disk: %d\n", freeSpace);
     printf("==============\n");
-    printf("The number of files in the disk: \n");
+    printf("The number of files in the disk: %d\n", bootSector.FileCount);
 // (including all files in the root directory and files in all subdirectories):
     printf("==============\n");
     printf("Number of FAT copies: %d\n", bootSector.BPB_NumFATs);
