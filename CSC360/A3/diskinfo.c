@@ -39,6 +39,8 @@ Figure out how the heck to access a file
 #include <stdlib.h>
 #include <stdint.h>
 
+int inTestingMode =0; 
+
 #pragma pack(push, 1)
 struct BootSector {
     uint8_t  BS_jmpBoot[3];//These two are ignored. 
@@ -53,12 +55,11 @@ struct BootSector {
     uint16_t BPB_FATSz16;//Sectors per FAT, (two bytes)
     uint16_t BPB_SecPerTrk; //Sectors per track, not sure hwat this is? 
     uint16_t BPB_NumHeads;//Number of heads
-    // uint8_t  ToIgnore; //bytes 28-36
-
 
 
     uint32_t BPB_HiddSec; //bytes 28-32, to be ignored. 
-    uint32_t BPB_TotSec32; //Bytes 32-36, to be ignored. 
+    uint32_t BPB_TotSec32; //Bytes 32-36, to be ignored.
+    uint16_t ignore;  
     uint8_t  Boot_Signature; //this should be 0x29 (41) if the Volume Id, Volume label, and File System type. 
     uint32_t VolumeID;//this is only present if Boot signature is correct
     uint8_t  VolumeLable[11];
@@ -93,6 +94,12 @@ void readBootSector(FILE *fp, struct BootSector *bootSector) {
     fread(bootSector, sizeof(struct BootSector), 1, fp);
     bootSector -> FileCount =0; 
 }
+void readFAT(FILE *fp, struct BootSector *bootSector, uint8_t **fat) {
+    uint32_t fatSize = bootSector->BPB_FATSz16 * bootSector->BPB_BytsPerSec;
+    *fat = malloc(fatSize);
+    fseek(fp, bootSector->BPB_RsvdSecCnt * bootSector->BPB_BytsPerSec, SEEK_SET);
+    fread(*fat, fatSize, 1, fp);
+}
 
 void readRootDirectory(FILE *fp, struct BootSector *bootSector, struct DirectoryEntry *rootDir) {
     int rootDirStart = (bootSector->BPB_RsvdSecCnt + bootSector->BPB_NumFATs * bootSector->BPB_FATSz16) * bootSector->BPB_BytsPerSec;
@@ -114,14 +121,74 @@ void PrintArray(uint8_t array[], int n){
     char string[n+1];
     for (int i = 0; i < n; i++) {
         string[i] = array[i];
+        if(inTestingMode){ 
+        printf("%02X ", array[i]);
+        }
     }
     string[n] = '\0';
     printf("[%s]\n",string); 
 }
 
 
+int countFiles(struct DirectoryEntry *dir, uint32_t dirSize, FILE *fp, struct BootSector *bootSector, uint8_t *fat) {
+    int fileCount = 0;
+    for (uint32_t i = 0; i < dirSize / sizeof(struct DirectoryEntry); ++i) {
+        if (dir[i].DIR_Name[0] == 0x00) {
+            break;  // No more entries in this directory
+        }
+        if (dir[i].DIR_Name[0] == 0xE5) {
+            continue;  // Deleted entry
+        }
+        if ((dir[i].DIR_Attr & 0x0F) == 0x0F) {
+            continue;  // Long file name entry
+        }
+        if (dir[i].DIR_Attr & 0x10) {
+            // Subdirectory, recursively count files
+            uint16_t firstCluster = dir[i].DIR_FstClusLO;
+            if (firstCluster == 0) {
+                continue;
+            }
+            // Read subdirectory entries
+            uint32_t subDirOffset = ((firstCluster - 2) * bootSector->BPB_SecPerClus + bootSector->BPB_RsvdSecCnt + bootSector->BPB_NumFATs * bootSector->BPB_FATSz16 + bootSector->BPB_RootEntCnt * sizeof(struct DirectoryEntry) / bootSector->BPB_BytsPerSec) * bootSector->BPB_BytsPerSec;
+            struct DirectoryEntry *subDir = malloc(bootSector->BPB_SecPerClus * bootSector->BPB_BytsPerSec);
+            fseek(fp, subDirOffset, SEEK_SET);
+            fread(subDir, bootSector->BPB_SecPerClus * bootSector->BPB_BytsPerSec, 1, fp);
+            fileCount += countFiles(subDir, bootSector->BPB_SecPerClus * bootSector->BPB_BytsPerSec, fp, bootSector, fat);
+            free(subDir);
+        } else {
+            ++fileCount;
+        }
+    }
+    return fileCount;
+}
+
+
+
+
+uint32_t countFreeClusters(uint8_t *fat, uint32_t fatSize) {
+    uint32_t freeClusters = 0;
+    for (uint32_t i = 0; i < fatSize * 2 / 3; i++) {
+        uint16_t entry;
+        if (i % 2 == 0) {
+            entry = (fat[i + i / 2] | (fat[i + i / 2 + 1] & 0x0F) << 8);
+        } else {
+            entry = ((fat[i + i / 2] >> 4) | fat[i + i / 2 + 1] << 4);
+        }
+        if (entry == 0x000) {
+            ++freeClusters;
+        }
+    }
+    return freeClusters;
+}
+
+
 //for testing only? Maaaaaaybe combine into one main that will control other things?? No idea how to use the make file to compile into 4. 
 int main(int argc, char *argv[]) {
+
+     inTestingMode =1; 
+    if(inTestingMode){
+        printf("In testing mode\n\n");
+    }
     if (argc != 2) {
         fprintf(stderr, "Usage: %s <IMA file>\n", argv[0]);
         return 1;
@@ -131,6 +198,10 @@ int main(int argc, char *argv[]) {
     if (!pointerToFile) {
         perror("Failed to open disk image");
         return 1;
+    } else{
+         if(inTestingMode){
+        printf("Opened File correctly\n\n");
+    }
     }
 
     struct BootSector bootSector;
@@ -139,7 +210,8 @@ int main(int argc, char *argv[]) {
     struct DirectoryEntry *rootDir = malloc(bootSector.BPB_RootEntCnt * sizeof(struct DirectoryEntry));
     readRootDirectory(pointerToFile, &bootSector, rootDir);
 
-    for (int i = 0; i < bootSector.BPB_RootEntCnt; i++) {
+
+    for (int i = 0; inTestingMode&&i < bootSector.BPB_RootEntCnt; i++) {
         if (rootDir[i].DIR_Name[0] == 0x00) {
             break; // No more entries
         }
@@ -177,15 +249,39 @@ int main(int argc, char *argv[]) {
 
     //NOTE TO SELF the 16 bit values might need conversion from big to little Endain, and Hex to binary. 
 
+
+    uint8_t *fat;
+    readFAT(pointerToFile, &bootSector, &fat);
+    uint32_t fatSize = bootSector.BPB_FATSz16 * bootSector.BPB_BytsPerSec;
+    uint32_t freeClusters = countFreeClusters(fat, fatSize);
+    uint32_t freeSpace = freeClusters * bootSector.BPB_SecPerClus * bootSector.BPB_BytsPerSec;
+
+    if(inTestingMode){
+        printf("Calculates free space and it is %d\n", freeSpace);
+    }
+   
+    // struct DirectoryEntry *rootDir;
+    // readRootDir(pointerToFile, &bootSector, &rootDir);
+    bootSector.FileCount = countFiles(rootDir, bootSector.BPB_RootEntCnt * sizeof(struct DirectoryEntry), pointerToFile, &bootSector, fat);
+    if(inTestingMode){
+        printf("Calculates number of files and there are %d\n", bootSector.FileCount);
+    }
+   
     printf("This OS is: "); PrintArray(bootSector.FileSystemType,8);
-    printf("The boot signature is %d \n", bootSector.Boot_Signature);
+    if(inTestingMode){ 
+    printf("The boot signature is 0x%02X \n", bootSector.Boot_Signature);
         printf("The bytes per sector is  %d \n", bootSector.BPB_BytsPerSec);
+    }
 
 
     printf("Lable of this disk: "); PrintArray(bootSector.VolumeLable,11);//MUST ADD CHECKING THAT THIS EXISTS!!
+    if(inTestingMode){ 
+        printf("Volume Label: [%.11s]\n", bootSector.VolumeLable);
+    }
+    uint32_t totalsectors = bootSector.BPB_TotSec16 != 0 ? bootSector.BPB_TotSec16 : bootSector.BPB_TotSec32;
 
-    printf("Total size of the disk: \n");
-    printf("Free size of the disk: \n");
+    printf("Total size of the disk: %d bytes = %d*%d\n",bootSector.BPB_BytsPerSec*totalsectors,bootSector.BPB_BytsPerSec,totalsectors);
+    printf("Free size of the disk: %d\n", freeSpace);
     printf("==============\n");
     printf("The number of files in the disk: \n");
 // (including all files in the root directory and files in all subdirectories):
