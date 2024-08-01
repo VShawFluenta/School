@@ -283,7 +283,9 @@ void listDirectory(FILE *fp, struct BootSector *bootSector, struct DirectoryEntr
                     }else{
                         printf(" in a subdirectory"); 
                     }
-                // dir[i].
+                if( dir[i].DIR_Attr & 0x02){
+                    printf("This file is hidden\n");
+                }
                 }
             }
             char name[12];
