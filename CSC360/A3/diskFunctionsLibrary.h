@@ -59,6 +59,6 @@ void PrintArray(uint8_t array[], int n);
 int countFiles(struct DirectoryEntry *dir, uint32_t dirSize, FILE *fp, struct BootSector *bootSector, uint8_t *fat);
 uint32_t countFreeClusters(uint8_t *fat, uint32_t totalClusters);
 void findAndPrintDiskLabel(struct BootSector* bootSector, struct DirectoryEntry *rootDir);
-void listDirectory(FILE *fp, struct BootSector *bootSector, struct DirectoryEntry *dir, uint32_t dirSize, int isRoot);
+void listDirectory(FILE *fp, struct BootSector *bootSector, struct DirectoryEntry *dir, uint32_t dirSize, uint8_t subdirName[], int isRoot, int depth);
 
 #endif // DISKFUNCTIONSLIBRARY_H

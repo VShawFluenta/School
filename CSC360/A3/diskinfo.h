@@ -52,7 +52,7 @@ struct DirectoryEntry {
 
 void readBootSector(FILE *fp, struct BootSector *bootSector);
 void readFAT(FILE *fp, struct BootSector *bootSector, uint8_t **fat);
-void readRootDirectory(FILE *fp, struct BootSector *bootSector, struct DirectoryEntry *rootDir);
+void readRootDirectory(FILE *fp, struct BootSector *bootSector, struct DirectoryEntry *dir, uint32_t dirSize, uint8_t subdirName[], int isRoot, int depth);
 void PrintFileName(uint8_t nameArray[]);
 void PrintArray(uint8_t array[], int n);
 int countFiles(struct DirectoryEntry *dir, uint32_t dirSize, FILE *fp, struct BootSector *bootSector, uint8_t *fat);

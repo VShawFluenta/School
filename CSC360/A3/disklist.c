@@ -28,7 +28,7 @@ directory entry should be skipped and not listed.*/
 
 
 int main(int argc, char *argv[]) {
-    inTestingMode =1; 
+    // inTestingMode =1; 
     if (argc != 2) {
         printf("Usage: %s <disk image file>\n", argv[0]);
         return 1;
@@ -48,8 +48,8 @@ int main(int argc, char *argv[]) {
 
     struct DirectoryEntry *rootDir = malloc(bootSector.BPB_RootEntCnt * sizeof(struct DirectoryEntry));
     readRootDirectory(fp, &bootSector, rootDir);
-
-    listDirectory(fp, &bootSector, rootDir, bootSector.BPB_RootEntCnt * sizeof(struct DirectoryEntry), 1);
+    uint8_t temp[0]; 
+    listDirectory(fp, &bootSector, rootDir, bootSector.BPB_RootEntCnt * sizeof(struct DirectoryEntry), temp, 1, 0);
 
     free(rootDir);
     free(fat);

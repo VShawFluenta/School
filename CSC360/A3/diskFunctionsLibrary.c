@@ -204,11 +204,11 @@ void findAndPrintDiskLabel(struct BootSector* bootSector, struct DirectoryEntry 
 
 }
 
-void listDirectory(FILE *fp, struct BootSector *bootSector, struct DirectoryEntry *dir, uint32_t dirSize, uint8_t subdirName[], int isRoot) {
+void listDirectory(FILE *fp, struct BootSector *bootSector, struct DirectoryEntry *dir, uint32_t dirSize, uint8_t subdirName[], int isRoot, int depth) {
     if (isRoot) {
         printf("Root Directory\n");
     }else {
-        printf("Start of subdirector ");
+        printf("Subdirectory ");
         PrintFileName(subdirName); 
     }
     printf("==================\n");
@@ -220,10 +220,10 @@ void listDirectory(FILE *fp, struct BootSector *bootSector, struct DirectoryEntr
     "sub directory" is . or 0x2E, then we should skip it. 
     
     */
-
-    for (uint32_t i = 0; i < dirSize / sizeof(struct DirectoryEntry); ++i) {
+// (dirsize ==0 ? (dir[i].DIR_Name[0] != 0x00), (i < dirSize / sizeof(struct DirectoryEntry)))
+    for (uint32_t i = 0; dir[i].DIR_Name[0] != 0x00 ; ++i) {
         if(inTestingMode){
-            printf("        This is iteration %d of listDirectories for loop\n", i); 
+            printf("        This is iteration %d of listDirectories for-loop\n", i); 
         }
         if (dir[i].DIR_Name[0] == 0x00) {
             break;  // No more entries in this directory
@@ -240,6 +240,9 @@ void listDirectory(FILE *fp, struct BootSector *bootSector, struct DirectoryEntr
                 printf("Found self directory or parent directory. Don't count this\n");
                 }
                 continue; 
+            }
+            for(int t =0; t < depth; t ++){
+                printf("\t"); 
             }
             char name[12];
             memcpy(name, dir[i].DIR_Name, 11);
@@ -261,10 +264,11 @@ void listDirectory(FILE *fp, struct BootSector *bootSector, struct DirectoryEntr
             struct DirectoryEntry *subDir = malloc(bootSector->BPB_SecPerClus * bootSector->BPB_BytsPerSec);
             fseek(fp, subDirOffset, SEEK_SET);
             fread(subDir, bootSector->BPB_SecPerClus * bootSector->BPB_BytsPerSec, 1, fp);
+            //TODO MUST FIND A WAY TO CONTINUE READING IF THE DIRECTORY IS LONGER THAN ONE SECTOR AND WE NEED TO START READING FROM MORE.  Use the fat table to find the next data index
             if(inTestingMode){
                 printf("        Calling listDir with directory with size of %d, which is %ld entries\n", dir[i].DIR_FileSize,dir[i].DIR_FileSize/sizeof(struct DirectoryEntry)); 
             }
-            listDirectory(fp, bootSector, subDir, dir[i].DIR_FileSize, dir[i].DIR_Name, 0);
+            listDirectory(fp, bootSector, subDir, dir[i].DIR_FileSize, dir[i].DIR_Name, 0, depth +1);
 
 
 
@@ -295,10 +299,16 @@ void listDirectory(FILE *fp, struct BootSector *bootSector, struct DirectoryEntr
             t.tm_isdst = -1;
             char dateBuf[20];
             strftime(dateBuf, sizeof(dateBuf), "%Y-%m-%d %H:%M:%S", &t);
+            for(int t =0; t < depth; t ++){
+                printf("\t"); 
+            }
             printf("F %10u %20s %s\n", dir[i].DIR_FileSize, name, dateBuf);
         }
         
     }
+    for(int t =0; t < depth; t ++){
+                printf("\t"); 
+            }
     if (isRoot) {
         printf("End of Root Directory");
     }else {
