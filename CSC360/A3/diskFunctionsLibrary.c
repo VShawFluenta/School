@@ -99,6 +99,11 @@ void PrintArray(uint8_t array[], int n){
 //Need  a way to not flag the folder above itself or itself as subdirectories so we don't call them infinetely
 int countFiles(struct DirectoryEntry *dir, uint32_t dirSize, FILE *fp, struct BootSector *bootSector, uint8_t *fat) {
 // bootSector.FileCount =0; 
+        if(inTestingMode){
+            printf("Running count files\n");
+        }
+
+int FileCount =0; 
     for (uint32_t i = 0; i < dirSize / sizeof(struct DirectoryEntry); ++i) {
         if(inTestingMode){
         printf("This is iteration %d of the count files function\n", i);//Note this is currently infinite. 
@@ -125,7 +130,7 @@ int countFiles(struct DirectoryEntry *dir, uint32_t dirSize, FILE *fp, struct Bo
             continue;  // Long file name entry
         }
         if ((dir[i].DIR_Attr & 0x10 )== 0x10 ) {
-            if(dir[i].DIR_Name[0] !=0x2E){
+            if(dir[i].DIR_Name[0] ==0x2E){
                 if(inTestingMode){
                 printf("Found self directory or parent directory. Don't count this\n");
                 }
@@ -145,18 +150,25 @@ int countFiles(struct DirectoryEntry *dir, uint32_t dirSize, FILE *fp, struct Bo
             //The location of the start of the new subdir is (num sectors leading up to the subdir)*num bytes in each sector. 
             //num sectors is: all the sectos of the FAT Table, The location of the first cluster of the subdir (this is the important part) Note to self this is two less because reasnons I can't remember. 
             //+ 
-            uint32_t subDirOffset = ((firstCluster - 2) * bootSector->BPB_SecPerClus + bootSector->BPB_RsvdSecCnt + bootSector->BPB_NumFATs * bootSector->BPB_FATSz16 /*Sectors per fat*num fats*/ + bootSector->BPB_RootEntCnt /*entries in root dir*/ * sizeof(struct DirectoryEntry) / bootSector->BPB_BytsPerSec) * bootSector->BPB_BytsPerSec;
+            uint32_t subDirOffset = ((firstCluster - 2) * bootSector->BPB_SecPerClus + 33) * bootSector->BPB_BytsPerSec;
             struct DirectoryEntry *subDir = malloc(bootSector->BPB_SecPerClus * bootSector->BPB_BytsPerSec);
             fseek(fp, subDirOffset, SEEK_SET);
             fread(subDir, bootSector->BPB_SecPerClus * bootSector->BPB_BytsPerSec, 1, fp);
-            bootSector->FileCount += countFiles(subDir, bootSector->BPB_SecPerClus * bootSector->BPB_BytsPerSec, fp, bootSector, fat);
+            FileCount += countFiles(subDir, bootSector->BPB_SecPerClus * bootSector->BPB_BytsPerSec, fp, bootSector, fat);
+            if(inTestingMode){
+                printf("Just called Count files, the current count of files is %d\n", FileCount); 
+            }
             free(subDir);
         } else {
-            bootSector->FileCount++;
+            FileCount++;
+            if(inTestingMode){ 
+            printf("Found the file ");
+            PrintFileName(dir[i].DIR_Name);
+            }
         }
         // bootSector->FileCount++;
     }
-    return bootSector->FileCount;
+    return FileCount;
 }
 
 
@@ -213,6 +225,9 @@ void listDirectory(FILE *fp, struct BootSector *bootSector, struct DirectoryEntr
         printf("Subdirectory ");
         PrintFileName(subdirName); 
     }
+    for(int t =0; t < depth; t ++){
+        printf("\t"); 
+    }
     printf("==================\n");
     /*Broad algorithm
     loop over every entry in the root directory, finding and printing the names of each file there. If the are 
@@ -233,10 +248,11 @@ void listDirectory(FILE *fp, struct BootSector *bootSector, struct DirectoryEntr
         if (dir[i].DIR_Name[0] == 0xE5 || (dir[i].DIR_Attr & 0x0F) == 0x0F) {
             continue;  // Deleted entry or long file name entry
         }
-        if (dir[i].DIR_Attr & 0x10) { // Directory
-            if (dir[i].DIR_FstClusLO == 0 || dir[i].DIR_FstClusLO == 1) {
+        if (dir[i].DIR_FstClusLO == 0 || dir[i].DIR_FstClusLO == 1) {
                 continue;  // Skip this directory entry
             }
+        if (dir[i].DIR_Attr & 0x10) { // Directory
+            
             if(dir[i].DIR_Name[0] ==0x2E){
                 if(inTestingMode){
                 printf("Found self directory or parent directory. Don't count this\n");
@@ -299,7 +315,7 @@ void listDirectory(FILE *fp, struct BootSector *bootSector, struct DirectoryEntr
             t.tm_hour = (dir[i].DIR_CrtTime >> 11) & 0x1F;
             t.tm_mday = dir[i].DIR_CrtDate & 0x1F;
             t.tm_mon = ((dir[i].DIR_CrtDate >> 5) & 0x0F) - 1;
-            t.tm_year = ((dir[i].DIR_CrtDate >> 9) & 0x7F) + 1980;
+            t.tm_year = ((dir[i].DIR_CrtDate >> 9) & 0x7F) + 80;
             t.tm_isdst = -1;
             char dateBuf[20];
             strftime(dateBuf, sizeof(dateBuf), "%Y-%m-%d %H:%M:%S", &t);
@@ -318,6 +334,9 @@ void listDirectory(FILE *fp, struct BootSector *bootSector, struct DirectoryEntr
     }else {
         printf("End of ");
         PrintFileName(subdirName); 
+    }
+    for(int t =0; t < depth; t ++){
+        printf("\t"); 
     }
     printf("~~~~~~~~~~~~~~~~~~~~~~~~\n");
  
