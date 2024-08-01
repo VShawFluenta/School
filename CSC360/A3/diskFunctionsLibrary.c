@@ -205,7 +205,9 @@ void findAndPrintDiskLabel(struct BootSector* bootSector, struct DirectoryEntry 
 }
 
 void listDirectory(FILE *fp, struct BootSector *bootSector, struct DirectoryEntry *dir, uint32_t dirSize, uint8_t subdirName[], int isRoot, int depth) {
-    if (isRoot) {
+    for(int t =0; t < depth; t ++){
+        printf("\t"); 
+    }if (isRoot) {
         printf("Root Directory\n");
     }else {
         printf("Subdirectory ");
@@ -297,7 +299,7 @@ void listDirectory(FILE *fp, struct BootSector *bootSector, struct DirectoryEntr
             t.tm_hour = (dir[i].DIR_CrtTime >> 11) & 0x1F;
             t.tm_mday = dir[i].DIR_CrtDate & 0x1F;
             t.tm_mon = ((dir[i].DIR_CrtDate >> 5) & 0x0F) - 1;
-            t.tm_year = ((dir[i].DIR_CrtDate >> 9) & 0x7F) + 80;
+            t.tm_year = ((dir[i].DIR_CrtDate >> 9) & 0x7F) + 1980;
             t.tm_isdst = -1;
             char dateBuf[20];
             strftime(dateBuf, sizeof(dateBuf), "%Y-%m-%d %H:%M:%S", &t);

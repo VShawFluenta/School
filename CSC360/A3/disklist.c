@@ -28,7 +28,7 @@ directory entry should be skipped and not listed.*/
 
 
 int main(int argc, char *argv[]) {
-    inTestingMode =1; 
+    // inTestingMode =1; 
     if (argc != 2) {
         printf("Usage: %s <disk image file>\n", argv[0]);
         return 1;
