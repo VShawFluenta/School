@@ -6,6 +6,7 @@
 #include <sys/mman.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <ctype.h>
 #include "diskFunctionsLibrary.h" 
 
 #define ROOT_DIR_OFFSET(bootSector) ((bootSector->BPB_RsvdSecCnt + bootSector->BPB_NumFATs * bootSector->BPB_FATSz16) * bootSector->BPB_BytsPerSec)
@@ -13,6 +14,10 @@
 
 void copyFileFromImage(struct BootSector *bootSector, struct DirectoryEntry *rootDir, uint8_t *diskData, const char *fullfilename) {
     struct DirectoryEntry *fileEntry = NULL;
+         if(inTestingMode){
+                printf("Given File is {%s} with lenth of %ld\n", fullfilename, strlen(fullfilename));
+        }
+
 
     // Find the file in the root directory
     for (uint32_t i = 0; i < bootSector->BPB_RootEntCnt; i++) {
@@ -26,39 +31,77 @@ void copyFileFromImage(struct BootSector *bootSector, struct DirectoryEntry *roo
             continue;  // Long file name entry
         }
 
+        
+        char filename[9]; 
+        char fileExtension[3]; 
+        int fn =0; 
+        int fe =0; 
+        for(fn =0; fn < 8; fn++){
+            if(fullfilename[fn] != 0x2E){
+                filename[fn]= toupper((char)fullfilename[fn]);
+            }else {
+                if(inTestingMode){
+                    printf("Found [%c] at iteration %d\n", fullfilename[fn], fn); 
+                }
+                break; 
+            }
+        }
+        filename[fn]='\0';
+            if(inTestingMode){
+                printf("Given Extension is is [");
+            }
+            fn ++; 
+        for(fe =0; fe < 3 && (fe+fn)< strlen(fullfilename) ; fe++){
+            
+            if(fullfilename[fe+fn] != 0x20){
+                fileExtension[fe]= toupper((char)fullfilename[fe+fn]);
+            }else{
+                break; 
+            }
+            if(inTestingMode){
+                printf("(%c, %d)", fullfilename[fe+fn], fe+fn);
+                
+            }
+        }
+        if(inTestingMode){
+                printf("]\n");
+            }
+        fileExtension[fe]='\0';
+
+
         char name[9];
-        char extension[4];
+        char extension[4]; 
+        extension[0]='\0'; 
         int n =0; 
         for(n =0; n < 8; n++){
             if(rootDir[i].DIR_Name[n] != 0x20){
                 name[n]= (char)rootDir[i].DIR_Name[n];
+            }else {
+                break;
             }
         }
-        name[n]='\n';
+        name[n]='\0';
         int e =0; 
+         if(inTestingMode){
+                printf("Directory Extension is [");
+            }
+            int count =0; 
         for(e =0; e < 3; e++){
-            if(rootDir[i].DIR_Name[e+8] != 0x20){
+            if(inTestingMode){
+                    printf("%c",(char)rootDir[i].DIR_Name[e+8] );
+                }
+            if(rootDir[i].DIR_Name[e+8] != ' '){
                 extension[e]= (char)rootDir[i].DIR_Name[e+8];
+                count ++; 
+                
+            }else{
+                break; 
             }
         }
-        extension[e]='\n';
-
-        char filename[9]; 
-        char fileExtension[3]; 
-
-        for(n =0; n < 8; n++){
-            if(fullfilename[n] != 0x2E){
-                filename[n]= (char)fullfilename[n];
+        if(inTestingMode){
+                printf("]\n");
             }
-        }
-        filename[n]='\n';
-
-        for(e =0; e < 3; e++){
-            if(rootDir[i].DIR_Name[e+8] != 0x20){
-                fileextension[e]= (char)fullfilename[e+8];
-            }
-        }
-        fileextension[e]='\n';
+        extension[count]='\0';
 
 
 
@@ -68,10 +111,24 @@ void copyFileFromImage(struct BootSector *bootSector, struct DirectoryEntry *roo
         // name[11] = '\0';
 
         // Check if this is the file we're looking for
-        if (strncmp(name, filename, strlen(filename)) == 0 && strncmp(name, filename, strlen(filename)) == 0) {
+        if(inTestingMode){
+                printf("Comparing given filename [%s] with name in Dir [%s]\n", filename, name);
+                printf("Comparing given fileExtension [%s] with extension in Dir [%s]\n", fileExtension, extension);
+
+            }
+        if (strncmp(name, filename, strlen(filename)) == 0 && strncmp(extension, fileExtension, strlen(extension)) == 0) {
+            if(inTestingMode){
+                printf("FOUND THE FILE\n"); 
+            }
             fileEntry = &rootDir[i];
             break;
         }
+        if(inTestingMode){
+            printf("after comparison\n");
+                printf("Comparing given filename [%s] with name in Dir [%s]\n", filename, name);
+                printf("Comparing given fileExtension [%s] with extension in Dir [%s]\n\n\n", fileExtension, extension);
+
+            }
     }
 
     if (fileEntry == NULL) {
@@ -84,7 +141,7 @@ void copyFileFromImage(struct BootSector *bootSector, struct DirectoryEntry *roo
     uint32_t fileSize = fileEntry->DIR_FileSize;
 
     // Open the destination file
-    FILE *outputFile = fopen(filename, "w");
+    FILE *outputFile = fopen(fullfilename, "w");
     if (outputFile == NULL) {
         perror("fopen");
         return;
@@ -122,6 +179,7 @@ void copyFileFromImage(struct BootSector *bootSector, struct DirectoryEntry *roo
 }
 
 int main(int argc, char *argv[]) {
+    inTestingMode =1; 
     if (argc != 3) {
         fprintf(stderr, "Usage: %s <disk_image> <filename>\n", argv[0]);
         return 1;
