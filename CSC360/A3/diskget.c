@@ -8,7 +8,6 @@
 #include <unistd.h>
 #include <ctype.h>
 #include "diskFunctionsLibrary.h" 
-
 #define ROOT_DIR_OFFSET(bootSector) ((bootSector->BPB_RsvdSecCnt + bootSector->BPB_NumFATs * bootSector->BPB_FATSz16) * bootSector->BPB_BytsPerSec)
 #define CLUSTER_OFFSET(bootSector, cluster) (((cluster - 2) * bootSector->BPB_SecPerClus + bootSector->BPB_RsvdSecCnt + bootSector->BPB_NumFATs * bootSector->BPB_FATSz16) * bootSector->BPB_BytsPerSec)
 
@@ -85,7 +84,7 @@ void copyFileFromImage(struct BootSector *bootSector, struct DirectoryEntry *roo
          if(inTestingMode){
                 printf("Directory Extension is [");
             }
-            int count =0; 
+        int count =0; 
         for(e =0; e < 3; e++){
             if(inTestingMode){
                     printf("%c",(char)rootDir[i].DIR_Name[e+8] );
@@ -139,24 +138,41 @@ void copyFileFromImage(struct BootSector *bootSector, struct DirectoryEntry *roo
     // Calculate the file's starting cluster and size
     uint16_t firstCluster = fileEntry->DIR_FstClusLO;
     uint32_t fileSize = fileEntry->DIR_FileSize;
+    int isBinary = isBinaryFile(fullfilename);
 
+    char upperFilename[strlen(fullfilename)]; 
+    // combineStringsWithPeriod(filename, fileExtension, upperFilename);
     // Open the destination file
-    FILE *outputFile = fopen(fullfilename, "w");
-    if (outputFile == NULL) {
+    toUpperCase(fullfilename, upperFilename); 
+    FILE *outputFile ;
+    if(isBinary){ 
+        outputFile = fopen(upperFilename, "wb");
+        if (outputFile == NULL) {
         perror("fopen");
         return;
+        }
+    } else{
+        outputFile = fopen(upperFilename, "w");
+        if (outputFile == NULL) {
+            perror("fopen");
+            return;
+        }
     }
-
+    int s =0;
     // Read and write the file's content
-    uint32_t bytesPerCluster = bootSector->BPB_SecPerClus * bootSector->BPB_BytsPerSec;
+    uint32_t bytesPerCluster = 512 /*bootSector->BPB_SecPerClus * bootSector->BPB_BytsPerSec*/;
     uint8_t *clusterData = malloc(bytesPerCluster);
 
     while (fileSize > 0) {
+        if(inTestingMode){
+            printf("This is the %dth iteration of the printing while loop. There are %d bytes left to print\n", s, fileSize);
+        }
         uint32_t clusterOffset = CLUSTER_OFFSET(bootSector, firstCluster);
         memcpy(clusterData, diskData + clusterOffset, bytesPerCluster);
 
         uint32_t bytesToWrite = (fileSize > bytesPerCluster) ? bytesPerCluster : fileSize;
-        fwrite(clusterData, 1, bytesToWrite, outputFile);
+        // fwrite(clusterData, 1, bytesToWrite, outputFile);
+          writeFormattedOutput(clusterData, bytesToWrite, outputFile, isBinary);
 
         fileSize -= bytesToWrite;
 
@@ -172,11 +188,19 @@ void copyFileFromImage(struct BootSector *bootSector, struct DirectoryEntry *roo
         if (firstCluster >= 0xFF8) {
             break;  // End of file
         }
+        s ++; 
     }
 
     free(clusterData);
     fclose(outputFile);
 }
+
+void readRootDirectory(FILE *fp, struct BootSector *bootSector, struct DirectoryEntry *rootDir) {
+    int rootDirStart = (bootSector->BPB_RsvdSecCnt + bootSector->BPB_NumFATs * bootSector->BPB_FATSz16) * bootSector->BPB_BytsPerSec;
+    fseek(fp, rootDirStart, SEEK_SET); //TODO ADD ERROR CHECKING/MESSAGES
+    fread(rootDir, sizeof(struct DirectoryEntry), bootSector->BPB_RootEntCnt, fp);
+}
+
 
 int main(int argc, char *argv[]) {
     inTestingMode =1; 

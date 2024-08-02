@@ -51,9 +51,13 @@ struct DirectoryEntry {
 
 extern int inTestingMode;
 
+
+int isBinaryFile(const char *filename);
+void toUpperCase(const char *str,  char*output);
 void readBootSector(FILE *fp, struct BootSector *bootSector);
 void readFAT(FILE *fp, struct BootSector *bootSector, uint8_t **fat);
 void readRootDirectory(FILE *fp, struct BootSector *bootSector, struct DirectoryEntry *rootDir);
+void writeFormattedOutput(uint8_t *clusterData, size_t bytesToWrite, FILE *outputFile, int isBinary);
 void PrintFileName(uint8_t nameArray[]);
 void PrintArray(uint8_t array[], int n);
 int countFiles(struct DirectoryEntry *dir, uint32_t dirSize, FILE *fp, struct BootSector *bootSector, uint8_t *fat);

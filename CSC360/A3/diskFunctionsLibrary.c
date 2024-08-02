@@ -3,7 +3,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <time.h>
-
+#include <ctype.h>
 
 int inTestingMode =0; 
 #define timeOffset 14 //offset of creation time in directory entry
@@ -57,6 +57,96 @@ struct DirectoryEntry {
 };
 #pragma pack(pop)
 
+
+int isBinaryFile(const char *filename) {
+    // List of common binary file extensions
+    const char *binaryExtensions[] = { ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".pdf", ".exe", ".bin", NULL };
+    
+    const char *extension = strrchr(filename, '.');
+    if (extension != NULL) {
+        for (int i = 0; binaryExtensions[i] != NULL; i++) {
+            if (strcasecmp(extension, binaryExtensions[i]) == 0) {
+                return 1; // Binary file
+            }
+        }
+    }
+    return 0; // Text file
+}
+// void combineStringsWithPeriod(const char *str1, const char *str2, char *result) {
+//     // Copy the first string to the result
+//     strcpy(result, str1);
+//     // Add the period
+//     strcat(result, ".");
+//     // Add the second string
+//     strcat(result, str2);
+// }
+
+void  toUpperCase(const char *str, char*output) {
+    int i =0; 
+    for ( i = 0; str[i] != '\0'; i++) {
+        output[i] = toupper((unsigned char)str[i]);
+    }
+    output[i]= '\0';
+
+    if(inTestingMode){
+        printf("New Upper string is %s\n", output); 
+    }
+}
+// void writeFormattedOutput(uint8_t *clusterData, size_t bytesToWrite, FILE *outputFile) {
+//     for (size_t i = 0; i < bytesToWrite; ++i) {
+//                 uint8_t byte = clusterData[i];
+
+//         if (isprint(byte) || isspace(byte)) {
+//             // Print printable characters and whitespace directly
+//             fprintf(outputFile, "%c", byte);
+//         } else {
+//             // Print non-printable characters in hexadecimal format
+//             // fprintf(outputFile, "\\x%02X", byte);
+//         }
+        
+//         // fprintf(outputFile, "%c", clusterData[i]);
+
+// /* if(isprint(clusterData[i])){ 
+//         fprintf(outputFile, "%c", clusterData[i]);
+//         }else{
+//             fprintf(outputFile, "%02x", clusterData[i]);
+//         }
+// */
+
+//         // Adding a newline every 16 bytes for readability
+//         // if ((i + 1) % 16 == 0) {
+//         //     fprintf(outputFile, "\n");
+//         // }
+//     }
+//     // fprintf(outputFile, "\n");  // Ensure the last line ends with a newline
+// }
+void writeFormattedOutput(uint8_t *clusterData, size_t bytesToWrite, FILE *outputFile, int isBinary) {
+    if (isBinary) {
+        fwrite(clusterData, 1, bytesToWrite, outputFile);
+    } else {
+        for (size_t i = 0; i < bytesToWrite; ++i) {
+            // Check if the character is printable
+            if (isprint(clusterData[i]) || clusterData[i] == '\n' || clusterData[i] == '\r'|| isspace(clusterData[i])) {
+                fprintf(outputFile, "%c", clusterData[i]);
+            } else {
+                // Replace non-printable characters with a placeholder
+                fprintf(outputFile, ".");
+            }
+        }
+    }
+}
+
+void PrintFileName(uint8_t nameArray[]){
+       // Null-terminate the name field for safety, though not strictly necessary
+    char name[12];
+    for (int i = 0; i < 11; i++) {
+        name[i] = nameArray[i];
+    }
+    name[11] = '\0';
+
+    // Print the filename and extension
+    printf("File or Dir Name: [%.8s.%.3s]\n", name, name + 8);
+}
 void readBootSector(FILE *fp, struct BootSector *bootSector) {
     fseek(fp, 0, SEEK_SET); //ADD ERROR MESSAGES/CHECKING TODO
     fread(bootSector, sizeof(struct BootSector), 1, fp);
@@ -69,22 +159,6 @@ void readFAT(FILE *fp, struct BootSector *bootSector, uint8_t **fat) {
     fread(*fat, fatSize, 1, fp);
 }
 
-void readRootDirectory(FILE *fp, struct BootSector *bootSector, struct DirectoryEntry *rootDir) {
-    int rootDirStart = (bootSector->BPB_RsvdSecCnt + bootSector->BPB_NumFATs * bootSector->BPB_FATSz16) * bootSector->BPB_BytsPerSec;
-    fseek(fp, rootDirStart, SEEK_SET); //TODO ADD ERROR CHECKING/MESSAGES
-    fread(rootDir, sizeof(struct DirectoryEntry), bootSector->BPB_RootEntCnt, fp);
-}
-void PrintFileName(uint8_t nameArray[]){
-       // Null-terminate the name field for safety, though not strictly necessary
-    char name[12];
-    for (int i = 0; i < 11; i++) {
-        name[i] = nameArray[i];
-    }
-    name[11] = '\0';
-
-    // Print the filename and extension
-    printf("[%.8s.%.3s]\n", name, name + 8);
-}
 void PrintArray(uint8_t array[], int n){
     char string[n+1];
     for (int i = 0; i < n; i++) {
