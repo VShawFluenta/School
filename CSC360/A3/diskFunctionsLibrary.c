@@ -6,6 +6,8 @@
 
 
 int inTestingMode =0; 
+#define timeOffset 14 //offset of creation time in directory entry
+#define dateOffset 16 //offset of creation date in directory entry
 
 #pragma pack(push, 1)
 struct BootSector {
@@ -216,6 +218,30 @@ void findAndPrintDiskLabel(struct BootSector* bootSector, struct DirectoryEntry 
 
 }
 
+void print_date_time(struct DirectoryEntry *entry) {
+    int time, date;
+    int hours, minutes, day, month, year;
+
+    time = entry->DIR_CrtTime;
+    date = entry->DIR_CrtDate;
+
+    // The year is stored as a value since 1980
+    // The year is stored in the high seven bits
+    year = ((date & 0xFE00) >> 9) + 1980;
+    // The month is stored in the middle four bits
+    month = (date & 0x1E0) >> 5;
+    // The day is stored in the low five bits
+    day = (date & 0x1F);
+
+    printf("%d-%02d-%02d ", year, month, day);
+    // The hours are stored in the high five bits
+    hours = (time & 0xF800) >> 11;
+    // The minutes are stored in the middle 6 bits
+    minutes = (time & 0x7E0) >> 5;
+
+    printf("%02d:%02d\n", hours, minutes);
+}
+
 void listDirectory(FILE *fp, struct BootSector *bootSector, struct DirectoryEntry *dir, uint32_t dirSize, uint8_t subdirName[], int isRoot, int depth) {
     for(int t =0; t < depth; t ++){
         printf("\t"); 
@@ -265,7 +291,8 @@ void listDirectory(FILE *fp, struct BootSector *bootSector, struct DirectoryEntr
             char name[12];
             memcpy(name, dir[i].DIR_Name, 11);
             name[11] = '\0';
-            printf("D %10s %20s\n", "-", name);
+            printf("D %10s %20s", "-", name);
+            print_date_time(&dir[i]); 
             //Must find a way to call this after all the files have been found. 
 
 
@@ -306,23 +333,57 @@ void listDirectory(FILE *fp, struct BootSector *bootSector, struct DirectoryEntr
                 }
                 }
             }
+
+            /*Notes on time formatting:
+            Date (2 bytes)
+
+Bits 0-4: Day of the month (1-31)
+Bits 5-8: Month (1 = January, 2 = February, ..., 12 = December)
+Bits 9-15: Year (offset from 1980, i.e., 0 = 1980, 1 = 1981, ..., 127 = 2107)
+Time (2 bytes)
+
+Bits 0-4: 2-second count (0-29, representing seconds 0, 2, 4, ..., 58)
+Bits 5-10: Minutes (0-59)
+Bits 11-15: Hours (0-23)
+*/
             char name[12];
             memcpy(name, dir[i].DIR_Name, 11);
             name[11] = '\0';
             struct tm t;
+            uint16_t date = dir[i].DIR_CrtDate;
+           
+            uint16_t time = dir[i].DIR_CrtTime;
+             if(inTestingMode){
+                printf("Date is %0X in hex and %d in decimal\n", date, date); 
+                printf("time is %0X in hex and %d in decimal\n", time, time); 
+
+            }
             t.tm_sec = (dir[i].DIR_CrtTime & 0x1F) * 2;
             t.tm_min = (dir[i].DIR_CrtTime >> 5) & 0x3F;
             t.tm_hour = (dir[i].DIR_CrtTime >> 11) & 0x1F;
+
+
             t.tm_mday = dir[i].DIR_CrtDate & 0x1F;
-            t.tm_mon = ((dir[i].DIR_CrtDate >> 5) & 0x0F) - 1;
-            t.tm_year = ((dir[i].DIR_CrtDate >> 9) & 0x7F) + 80;
+            t.tm_mon = (date & 0x1E0) >> 5;
+            // t.tm_year = ((dir[i].DIR_CrtDate >> 9) & 0x7F) + 1980; // Bits 9-15
+            t.tm_year = ((date & 0xFE00) >> 9) + 1980;
+	//the month is stored in the middle four bits
+	// t.month = (date & 0x1E0) >> 5;
+	//the day is stored in the low five bits
+	// day = (date & 0x1F);
             t.tm_isdst = -1;
             char dateBuf[20];
+            if(inTestingMode){
+                printf("The year currently is %d\n", t.tm_year);
+            }
             strftime(dateBuf, sizeof(dateBuf), "%Y-%m-%d %H:%M:%S", &t);
             for(int t =0; t < depth; t ++){
                 printf("\t"); 
             }
-            printf("F %10u %20s %s\n", dir[i].DIR_FileSize, name, dateBuf);
+            // printf("F %10u %20s %s\n", dir[i].DIR_FileSize, name, dateBuf);
+            printf("F %10u %20s ", dir[i].DIR_FileSize, name);
+                        print_date_time(&dir[i]); 
+
         }
         
     }
@@ -341,4 +402,6 @@ void listDirectory(FILE *fp, struct BootSector *bootSector, struct DirectoryEntr
     printf("~~~~~~~~~~~~~~~~~~~~~~~~\n");
  
 }
+//~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ DISKGET specific functions
+
 
