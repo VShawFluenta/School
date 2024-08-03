@@ -9,7 +9,7 @@
 #include <ctype.h>
 #include "diskFunctionsLibrary.h" 
 #define ROOT_DIR_OFFSET(bootSector) ((bootSector->BPB_RsvdSecCnt + bootSector->BPB_NumFATs * bootSector->BPB_FATSz16) * bootSector->BPB_BytsPerSec)
-#define CLUSTER_OFFSET(bootSector, cluster) (((cluster - 2) * bootSector->BPB_SecPerClus + bootSector->BPB_RsvdSecCnt + bootSector->BPB_NumFATs * bootSector->BPB_FATSz16) * bootSector->BPB_BytsPerSec)
+#define CLUSTER_OFFSET(bootSector, cluster) (((cluster - 2) * bootSector->BPB_SecPerClus + 33) * bootSector->BPB_BytsPerSec)
 
 void copyFileFromImage(struct BootSector *bootSector, struct DirectoryEntry *rootDir, uint8_t *diskData, const char *fullfilename) {
     struct DirectoryEntry *fileEntry = NULL;
@@ -138,6 +138,9 @@ void copyFileFromImage(struct BootSector *bootSector, struct DirectoryEntry *roo
     // Calculate the file's starting cluster and size
     uint16_t firstCluster = fileEntry->DIR_FstClusLO;
     uint32_t fileSize = fileEntry->DIR_FileSize;
+    if(inTestingMode){
+        printf("The size of the file to be copied is %d\n", fileSize); 
+    }
     int isBinary = isBinaryFile(fullfilename);
 
     char upperFilename[strlen(fullfilename)]; 
@@ -167,10 +170,11 @@ void copyFileFromImage(struct BootSector *bootSector, struct DirectoryEntry *roo
         if(inTestingMode){
             printf("This is the %dth iteration of the printing while loop. There are %d bytes left to print\n", s, fileSize);
         }
-        uint32_t clusterOffset = CLUSTER_OFFSET(bootSector, firstCluster);
-        memcpy(clusterData, diskData + clusterOffset, bytesPerCluster);
-
         uint32_t bytesToWrite = (fileSize > bytesPerCluster) ? bytesPerCluster : fileSize;
+
+        uint32_t clusterOffset = CLUSTER_OFFSET(bootSector, firstCluster);
+        memcpy(clusterData, diskData + clusterOffset, bytesToWrite);
+
         // fwrite(clusterData, 1, bytesToWrite, outputFile);
           writeFormattedOutput(clusterData, bytesToWrite, outputFile, isBinary);
 
@@ -182,6 +186,9 @@ void copyFileFromImage(struct BootSector *bootSector, struct DirectoryEntry *roo
             fatEntry = *(uint16_t *)(diskData + bootSector->BPB_RsvdSecCnt * bootSector->BPB_BytsPerSec +  firstCluster +firstCluster/2) & 0xFFF;
         } else {
             fatEntry = *(uint16_t *)(diskData + bootSector->BPB_RsvdSecCnt * bootSector->BPB_BytsPerSec + firstCluster +firstCluster/2) >> 4;
+        }
+        if(inTestingMode){
+            printf("About to look for more data at sector %d\n", fatEntry);
         }
 
         firstCluster = fatEntry;
@@ -195,11 +202,6 @@ void copyFileFromImage(struct BootSector *bootSector, struct DirectoryEntry *roo
     fclose(outputFile);
 }
 
-void readRootDirectory(FILE *fp, struct BootSector *bootSector, struct DirectoryEntry *rootDir) {
-    int rootDirStart = (bootSector->BPB_RsvdSecCnt + bootSector->BPB_NumFATs * bootSector->BPB_FATSz16) * bootSector->BPB_BytsPerSec;
-    fseek(fp, rootDirStart, SEEK_SET); //TODO ADD ERROR CHECKING/MESSAGES
-    fread(rootDir, sizeof(struct DirectoryEntry), bootSector->BPB_RootEntCnt, fp);
-}
 
 
 int main(int argc, char *argv[]) {
@@ -225,9 +227,10 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    uint8_t *diskData = mmap(NULL, sb.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+    uint8_t *diskData = mmap(NULL, sb.st_size, PROT_READ, MAP_PRIVATE, fd, 0);//Note to self disk data is the pointer to the 
+    //start of the IMAGE file, not specifically the file we want to print. 
     if (diskData == MAP_FAILED) {
-        perror("mmap");
+        perror("mmap failed");
         close(fd);
         return 1;
     }

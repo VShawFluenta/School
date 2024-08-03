@@ -1,0 +1,38 @@
+Given File is {ACS} with lenth of 3
+Given Extension is is []
+Directory Extension is [C ]
+Comparing given filename [ACS] with name in Dir [ACS]
+Comparing given fileExtension [] with extension in Dir [C]
+after comparison
+Comparing given filename [ACS] with name in Dir [ACS]
+Comparing given fileExtension [] with extension in Dir [C]
+
+
+Given Extension is is []
+Directory Extension is [ ]
+Comparing given filename [ACS] with name in Dir [SUB1]
+Comparing given fileExtension [] with extension in Dir []
+after comparison
+Comparing given filename [ACS] with name in Dir [SUB1]
+Comparing given fileExtension [] with extension in Dir []
+
+
+Given Extension is is []
+Directory Extension is [PDF]
+Comparing given filename [ACS] with name in Dir [FAT12]
+Comparing given fileExtension [] with extension in Dir [PDF]
+after comparison
+Comparing given filename [ACS] with name in Dir [FAT12]
+Comparing given fileExtension [] with extension in Dir [PDF]
+
+
+Given Extension is is []
+Directory Extension is [ ]
+Comparing given filename [ACS] with name in Dir [CSC360]
+Comparing given fileExtension [] with extension in Dir []
+after comparison
+Comparing given filename [ACS] with name in Dir [CSC360]
+Comparing given fileExtension [] with extension in Dir []
+
+
+File not found.

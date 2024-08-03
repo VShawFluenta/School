@@ -34,9 +34,6 @@ struct BootSector {
     uint8_t  FileSystemType[8];
 
     int FileCount ; 
-
-
-
 };
 #pragma pack(pop)
 
@@ -57,6 +54,11 @@ struct DirectoryEntry {
 };
 #pragma pack(pop)
 
+void readRootDirectory(FILE *fp, struct BootSector *bootSector, struct DirectoryEntry *rootDir) {
+    int rootDirStart = (bootSector->BPB_RsvdSecCnt + bootSector->BPB_NumFATs * bootSector->BPB_FATSz16) * bootSector->BPB_BytsPerSec;
+    fseek(fp, rootDirStart, SEEK_SET); //TODO ADD ERROR CHECKING/MESSAGES
+    fread(rootDir, sizeof(struct DirectoryEntry), bootSector->BPB_RootEntCnt, fp);
+}
 
 int isBinaryFile(const char *filename) {
     // List of common binary file extensions
@@ -67,6 +69,9 @@ int isBinaryFile(const char *filename) {
         for (int i = 0; binaryExtensions[i] != NULL; i++) {
             if (strcasecmp(extension, binaryExtensions[i]) == 0) {
                 return 1; // Binary file
+                if(inTestingMode){
+                    printf("%s is a binary file\n", filename); 
+                }
             }
         }
     }
@@ -121,16 +126,20 @@ void  toUpperCase(const char *str, char*output) {
 //     // fprintf(outputFile, "\n");  // Ensure the last line ends with a newline
 // }
 void writeFormattedOutput(uint8_t *clusterData, size_t bytesToWrite, FILE *outputFile, int isBinary) {
+        fseek(outputFile, 0, SEEK_END);
+
     if (isBinary) {
         fwrite(clusterData, 1, bytesToWrite, outputFile);
     } else {
-        for (size_t i = 0; i < bytesToWrite; ++i) {
+        for (size_t i = 0; i < bytesToWrite; i++) {
             // Check if the character is printable
             if (isprint(clusterData[i]) || clusterData[i] == '\n' || clusterData[i] == '\r'|| isspace(clusterData[i])) {
                 fprintf(outputFile, "%c", clusterData[i]);
             } else {
                 // Replace non-printable characters with a placeholder
-                fprintf(outputFile, ".");
+                // fprintf(outputFile, ".");
+                fwrite(&clusterData[i], 1, 1, outputFile);
+                // fprintf(outputFile, "%x", clusterData[i]); 
             }
         }
     }
@@ -292,6 +301,13 @@ void findAndPrintDiskLabel(struct BootSector* bootSector, struct DirectoryEntry 
 
 }
 
+void printBinary(uint16_t Bnumber){
+    for(int i = 16-1; i >=0; i--){
+        printf("%d",((Bnumber>> i)& 1)); 
+    }
+    printf("\n"); 
+}
+
 void print_date_time(struct DirectoryEntry *entry) {
     int time, date;
     int hours, minutes, day, month, year;
@@ -312,8 +328,15 @@ void print_date_time(struct DirectoryEntry *entry) {
     hours = (time & 0xF800) >> 11;
     // The minutes are stored in the middle 6 bits
     minutes = (time & 0x7E0) >> 5;
+        printf("%02d:%02d\n", hours, minutes);
 
-    printf("%02d:%02d\n", hours, minutes);
+if(inTestingMode){
+    printf("Raw Binary date is "); 
+    printBinary(date); 
+    printf("Raw Binary time is "); 
+    printBinary(time); 
+}
+
 }
 
 void listDirectory(FILE *fp, struct BootSector *bootSector, struct DirectoryEntry *dir, uint32_t dirSize, uint8_t subdirName[], int isRoot, int depth) {
