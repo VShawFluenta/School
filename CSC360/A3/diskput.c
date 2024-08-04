@@ -10,7 +10,14 @@
 void setDirectoryEntry(struct DirectoryEntry *entry, const char *filename, uint16_t firstCluster, uint32_t fileSize, struct stat *st) {
     char shortName[12];
     getShortFileName((char *)filename, shortName);
-    memcpy(entry->DIR_Name, shortName, 11);
+    if(inTestingMode){
+            printf("Filename is [%s]\n", filename); 
+        }
+    memcpy(entry->DIR_Name, filename, 11);
+    entry->DIR_Name[0] = "t"; 
+    // if(inTestingMode){
+    //         printf("newly made file name is [%s]\n", filename); 
+    //     }
     entry->DIR_Attr = 0x20;
     entry->DIR_NTRes = 0;
     entry->DIR_CrtTimeTenth = 0;
@@ -49,22 +56,32 @@ void copyFileToImage(struct BootSector *bootSector, struct DirectoryEntry *rootD
     }
 
     // Check available space
-    uint32_t fatSize = bootSector->BPB_FATSz16 * bootSector->BPB_BytsPerSec;
+    uint32_t fatSize = 512;
     uint32_t clusterSize = 512 /*bootSector->BPB_SecPerClus * bootSector->BPB_BytsPerSec*/;
     if (!checkAvailableSpace(diskData + bootSector->BPB_RsvdSecCnt * bootSector->BPB_BytsPerSec, fatSize, fileSize, clusterSize)) {
         printf("No enough free space in the disk image.\n");
         return;
+    }else{
+        if(inTestingMode){
+            printf("There should be enough space for this file\n"); 
+        }
     }
 
     FILE *inputFile = fopen(filepath, "rb");
     if (!inputFile) {
         perror("fopen");
         return;
+    }else { 
+        if(inTestingMode){
+            printf("Correctly Opened file\n"); 
+        }
     }
 
     struct DirectoryEntry *entry = &rootDir[freeEntryIndex];
     uint16_t firstCluster = findFreeCluster(diskData + bootSector->BPB_RsvdSecCnt * bootSector->BPB_BytsPerSec, fatSize);
-
+    if(inTestingMode){
+            printf("FOund first cluster at %d\n", firstCluster); 
+        }
     if (firstCluster == 0xFFFF) {
         printf("No free cluster found.\n");
         fclose(inputFile);
@@ -93,12 +110,12 @@ void copyFileToImage(struct BootSector *bootSector, struct DirectoryEntry *rootD
     fclose(inputFile);
 }
 void printUsage() {
-    printf("Usage: ./diskput disk.IMA /subdir1/subdir2/foo.txt\n");
+    printf("Usage: ./diskput <IMA file> <desired file>\n");
 }
 
 int main(int argc, char *argv[]) {
 
-    // inTestingMode =1; 
+    inTestingMode =1; 
 
 
     if (argc != 3) {

@@ -74,7 +74,7 @@ void getShortFileName(char *fullfilename, char *shortName) {
     //     toUpperCase(shortName);
     // }
 
-            // char filename[9]; 
+        //     char filename[9]; 
         // char fileExtension[3]; 
         int fn =0; 
         int fe =0; 
