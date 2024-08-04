@@ -205,7 +205,7 @@ void copyFileFromImage(struct BootSector *bootSector, struct DirectoryEntry *roo
 
 
 int main(int argc, char *argv[]) {
-    inTestingMode =1; 
+    // inTestingMode =1; 
     if (argc != 3) {
         fprintf(stderr, "Usage: %s <disk_image> <filename>\n", argv[0]);
         return 1;

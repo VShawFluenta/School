@@ -407,13 +407,13 @@ void print_date_time(struct DirectoryEntry *entry, int isDir) {
     int time, date;
     int hours, minutes, seconds, day, month, year;
 
-
+date = entry->DIR_WrtDate;
         if(isDir){ 
             time = entry->DIR_WrtTime;
-            date = entry->DIR_WrtDate;
+            
         }else{
             time = entry->DIR_CrtTime;
-            date = entry->DIR_CrtDate;  
+            // date = entry->DIR_CrtDate;  
         }
 
     // The year is stored as a value since 1980
