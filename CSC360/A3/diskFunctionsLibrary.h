@@ -51,6 +51,12 @@ struct DirectoryEntry {
 
 extern int inTestingMode;
 
+int checkAvailableSpace(uint8_t *fat, uint32_t fatSize, uint32_t fileSize, uint32_t clusterSize);
+void setDirectoryEntry(struct DirectoryEntry *entry, const char *filename, uint16_t firstCluster, uint32_t fileSize, struct stat *st) ;
+void writeToFAT(uint8_t *fat, uint16_t cluster, uint16_t value) ;
+uint16_t findFreeCluster(uint8_t *fat, uint32_t fatSize) ;
+int findFreeDirectoryEntry(struct DirectoryEntry *rootDir, uint32_t rootDirSize);
+void getShortFileName(char *fullName, char *shortName) ;
 
 int isBinaryFile(const char *filename);
 void toUpperCase(const char *str,  char*output);

@@ -54,6 +54,121 @@ struct DirectoryEntry {
 };
 #pragma pack(pop)
 
+void getShortFileName(char *fullfilename, char *shortName) {
+    // memset(shortName, ' ', 11);
+    // char *dot = strrchr(fullName, '.');
+    // if (dot) {
+    //     int baseLen = dot - fullName;
+    //     if (baseLen > 8) baseLen = 8;
+    //     memcpy(shortName, fullName, baseLen);
+    //     toUpperCase(shortName);
+    //     int extLen = strlen(dot + 1);
+    //     if (extLen > 3) extLen = 3;
+    //     memcpy(shortName + 8, dot + 1, extLen);
+    //     toUpperCase(shortName + 8);
+    // } else {
+    //     int baseLen = strlen(fullName);
+    //     if (baseLen > 8) baseLen = 8;
+    //     memcpy(shortName, fullName, baseLen);
+    //     toUpperCase(shortName);
+    // }
+
+            // char filename[9]; 
+        char fileExtension[3]; 
+        int fn =0; 
+        int fe =0; 
+        for(fn =0; fn < 8; fn++){
+            if(fullfilename[fn] != '0x2E'){
+                shortname[fn]= toupper((char)fullfilename[fn]);
+            }else {
+                if(inTestingMode){
+                    printf("Found [%c] at iteration %d\n", fullfilename[fn], fn); 
+                }
+                break; 
+            }
+        }
+        shortname[fn]='.';
+            if(inTestingMode){
+                printf("Given Extension is is [");
+            }
+            fn ++; 
+        for(fe =0; fe < 3 && (fe+fn)< strlen(fullfilename) ; fe++){
+            
+            if(fullfilename[fe+fn] != 0x20){
+                shortname[fe]= toupper((char)fullfilename[fe+fn]);
+            }else{
+                break; 
+            }
+            if(inTestingMode){
+                printf("(%c, %d)", fullfilename[fe+fn], fe+fn);
+                
+            }
+        }
+}
+
+
+//Finds the index (within the context of the root dir) of the next free entry 
+int findFreeDirectoryEntry(struct DirectoryEntry *rootDir, uint32_t rootDirSize) {
+    for (uint32_t i = 0; i < rootDirSize; i++) {
+        if (rootDir[i].DIR_Name[0] == 0x00 || rootDir[i].DIR_Name[0] == 0xE5) {
+            return i;
+        }
+    }
+    return -1;
+}
+
+uint16_t findFreeCluster(uint8_t *fat, uint32_t fatSize) {
+    for (uint16_t i = 2; i < fatSize / 2; i++) {
+        uint16_t entry = *(uint16_t *)(fat + i * 2) & 0xFFF;
+        if (entry == 0x000) {
+            return i;
+        }
+    }
+    return 0xFFFF;
+}
+
+void writeToFAT(uint8_t *fat, uint16_t cluster, uint16_t value) {
+    uint16_t *entry = (uint16_t *)(fat + cluster * 2);
+    *entry = value & 0xFFF;
+}
+
+void setDirectoryEntry(struct DirectoryEntry *entry, const char *filename, uint16_t firstCluster, uint32_t fileSize, struct stat *st) {
+    char shortName[12];
+    getShortFileName((char *)filename, shortName);
+    memcpy(entry->DIR_Name, shortName, 11);
+    entry->DIR_Attr = 0x20;
+    entry->DIR_NTRes = 0;
+    entry->DIR_CrtTimeTenth = 0;
+
+    struct tm *timeinfo = localtime(&st->st_mtime);
+    uint16_t time = (timeinfo->tm_hour << 11) | (timeinfo->tm_min << 5) | (timeinfo->tm_sec / 2);
+    uint16_t date = ((timeinfo->tm_year - 80) << 9) | ((timeinfo->tm_mon + 1) << 5) | timeinfo->tm_mday;
+
+    entry->DIR_CrtTime = time;
+    entry->DIR_CrtDate = date;
+    entry->DIR_LstAccDate = date;
+    entry->DIR_FstClusHI = 0;
+    entry->DIR_WrtTime = time;
+    entry->DIR_WrtDate = date;
+    entry->DIR_FstClusLO = firstCluster;
+    entry->DIR_FileSize = fileSize;
+}
+
+int checkAvailableSpace(uint8_t *fat, uint32_t fatSize, uint32_t fileSize, uint32_t clusterSize) {
+    uint32_t requiredClusters = (fileSize + clusterSize - 1) / clusterSize;
+    uint32_t freeClusters = 0;
+    for (uint16_t i = 2; i < fatSize / 2; i++) {
+        if (*(uint16_t *)(fat + i * 2) == 0x0000) {
+            freeClusters++;
+            if (freeClusters >= requiredClusters) {
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
+
+
 void readRootDirectory(FILE *fp, struct BootSector *bootSector, struct DirectoryEntry *rootDir) {
     int rootDirStart = (bootSector->BPB_RsvdSecCnt + bootSector->BPB_NumFATs * bootSector->BPB_FATSz16) * bootSector->BPB_BytsPerSec;
     fseek(fp, rootDirStart, SEEK_SET); //TODO ADD ERROR CHECKING/MESSAGES
