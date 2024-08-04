@@ -6,7 +6,27 @@
 #define ROOT_DIR_OFFSET(bootSector) ((bootSector->BPB_RsvdSecCnt + bootSector->BPB_NumFATs * bootSector->BPB_FATSz16) * bootSector->BPB_BytsPerSec)
 #define CLUSTER_OFFSET(bootSector, cluster) (((cluster - 2) + 33) * 512)
 
+void setDirectoryEntry(struct DirectoryEntry *entry, const char *filename, uint16_t firstCluster, uint32_t fileSize, struct stat *st) {
+    char shortName[12];
+    getShortFileName((char *)filename, shortName);
+    memcpy(entry->DIR_Name, shortName, 11);
+    entry->DIR_Attr = 0x20;
+    entry->DIR_NTRes = 0;
+    entry->DIR_CrtTimeTenth = 0;
 
+    struct tm *timeinfo = localtime(&st->st_mtime);
+    uint16_t time = (timeinfo->tm_hour << 11) | (timeinfo->tm_min << 5) | (timeinfo->tm_sec / 2);
+    uint16_t date = ((timeinfo->tm_year - 80) << 9) | ((timeinfo->tm_mon + 1) << 5) | timeinfo->tm_mday;
+
+    entry->DIR_CrtTime = time;
+    entry->DIR_CrtDate = date;
+    entry->DIR_LstAccDate = date;
+    entry->DIR_FstClusHI = 0;
+    entry->DIR_WrtTime = time;
+    entry->DIR_WrtDate = date;
+    entry->DIR_FstClusLO = firstCluster;
+    entry->DIR_FileSize = fileSize;
+}
 void copyFileToImage(struct BootSector *bootSector, struct DirectoryEntry *rootDir, uint8_t *diskData, const char *filepath, const char *targetDirPath) {
     struct stat st;
     if (stat(filepath, &st) == -1) {

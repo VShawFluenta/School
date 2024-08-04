@@ -74,12 +74,12 @@ void getShortFileName(char *fullfilename, char *shortName) {
     // }
 
             // char filename[9]; 
-        char fileExtension[3]; 
+        // char fileExtension[3]; 
         int fn =0; 
         int fe =0; 
         for(fn =0; fn < 8; fn++){
-            if(fullfilename[fn] != '0x2E'){
-                shortname[fn]= toupper((char)fullfilename[fn]);
+            if(fullfilename[fn] != ' '){
+                shortName[fn]= toupper((char)fullfilename[fn]);
             }else {
                 if(inTestingMode){
                     printf("Found [%c] at iteration %d\n", fullfilename[fn], fn); 
@@ -87,7 +87,7 @@ void getShortFileName(char *fullfilename, char *shortName) {
                 break; 
             }
         }
-        shortname[fn]='.';
+        shortName[fn]='.';
             if(inTestingMode){
                 printf("Given Extension is is [");
             }
@@ -95,7 +95,7 @@ void getShortFileName(char *fullfilename, char *shortName) {
         for(fe =0; fe < 3 && (fe+fn)< strlen(fullfilename) ; fe++){
             
             if(fullfilename[fe+fn] != 0x20){
-                shortname[fe]= toupper((char)fullfilename[fe+fn]);
+                shortName[fe]= toupper((char)fullfilename[fe+fn]);
             }else{
                 break; 
             }
@@ -132,27 +132,7 @@ void writeToFAT(uint8_t *fat, uint16_t cluster, uint16_t value) {
     *entry = value & 0xFFF;
 }
 
-void setDirectoryEntry(struct DirectoryEntry *entry, const char *filename, uint16_t firstCluster, uint32_t fileSize, struct stat *st) {
-    char shortName[12];
-    getShortFileName((char *)filename, shortName);
-    memcpy(entry->DIR_Name, shortName, 11);
-    entry->DIR_Attr = 0x20;
-    entry->DIR_NTRes = 0;
-    entry->DIR_CrtTimeTenth = 0;
 
-    struct tm *timeinfo = localtime(&st->st_mtime);
-    uint16_t time = (timeinfo->tm_hour << 11) | (timeinfo->tm_min << 5) | (timeinfo->tm_sec / 2);
-    uint16_t date = ((timeinfo->tm_year - 80) << 9) | ((timeinfo->tm_mon + 1) << 5) | timeinfo->tm_mday;
-
-    entry->DIR_CrtTime = time;
-    entry->DIR_CrtDate = date;
-    entry->DIR_LstAccDate = date;
-    entry->DIR_FstClusHI = 0;
-    entry->DIR_WrtTime = time;
-    entry->DIR_WrtDate = date;
-    entry->DIR_FstClusLO = firstCluster;
-    entry->DIR_FileSize = fileSize;
-}
 
 int checkAvailableSpace(uint8_t *fat, uint32_t fatSize, uint32_t fileSize, uint32_t clusterSize) {
     uint32_t requiredClusters = (fileSize + clusterSize - 1) / clusterSize;
@@ -182,7 +162,7 @@ int isBinaryFile(const char *filename) {
     const char *extension = strrchr(filename, '.');
     if (extension != NULL) {
         for (int i = 0; binaryExtensions[i] != NULL; i++) {
-            if (strcasecmp(extension, binaryExtensions[i]) == 0) {
+            if (strcmp(extension, binaryExtensions[i]) == 0) {
                 return 1; // Binary file
                 if(inTestingMode){
                     printf("%s is a binary file\n", filename); 
@@ -269,7 +249,7 @@ void PrintFileName(uint8_t nameArray[]){
     name[11] = '\0';
 
     // Print the filename and extension
-    printf("File or Dir Name: [%.8s.%.3s]\n", name, name + 8);
+    printf(": [%.8s.%.3s]\n", name, name + 8);
 }
 void readBootSector(FILE *fp, struct BootSector *bootSector) {
     fseek(fp, 0, SEEK_SET); //ADD ERROR MESSAGES/CHECKING TODO
@@ -423,12 +403,18 @@ void printBinary(uint16_t Bnumber){
     printf("\n"); 
 }
 
-void print_date_time(struct DirectoryEntry *entry) {
+void print_date_time(struct DirectoryEntry *entry, int isDir) {
     int time, date;
-    int hours, minutes, day, month, year;
+    int hours, minutes, seconds, day, month, year;
 
-    time = entry->DIR_CrtTime;
-    date = entry->DIR_CrtDate;
+
+        if(isDir){ 
+            time = entry->DIR_WrtTime;
+            date = entry->DIR_WrtDate;
+        }else{
+            time = entry->DIR_CrtTime;
+            date = entry->DIR_CrtDate;  
+        }
 
     // The year is stored as a value since 1980
     // The year is stored in the high seven bits
@@ -443,14 +429,16 @@ void print_date_time(struct DirectoryEntry *entry) {
     hours = (time & 0xF800) >> 11;
     // The minutes are stored in the middle 6 bits
     minutes = (time & 0x7E0) >> 5;
-        printf("%02d:%02d\n", hours, minutes);
 
-if(inTestingMode){
-    printf("Raw Binary date is "); 
-    printBinary(date); 
-    printf("Raw Binary time is "); 
-    printBinary(time); 
-}
+      seconds = (time & 0x1F) ;
+        printf("%02d:%02d:%02d\n", hours, minutes, seconds);
+
+    if(inTestingMode){
+        printf("Raw Binary date is "); 
+        printBinary(date); 
+        printf("Raw Binary time is "); 
+        printBinary(time); 
+    }
 
 }
 
@@ -504,7 +492,7 @@ void listDirectory(FILE *fp, struct BootSector *bootSector, struct DirectoryEntr
             memcpy(name, dir[i].DIR_Name, 11);
             name[11] = '\0';
             printf("D %10s %20s", "-", name);
-            print_date_time(&dir[i]); 
+            print_date_time(&dir[i], 1); 
             //Must find a way to call this after all the files have been found. 
 
 
@@ -594,7 +582,7 @@ Bits 11-15: Hours (0-23)
             }
             // printf("F %10u %20s %s\n", dir[i].DIR_FileSize, name, dateBuf);
             printf("F %10u %20s ", dir[i].DIR_FileSize, name);
-                        print_date_time(&dir[i]); 
+                        print_date_time(&dir[i], 0); 
 
         }
         
