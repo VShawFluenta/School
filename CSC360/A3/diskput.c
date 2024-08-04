@@ -1,9 +1,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/stat.h>
 #include "diskFunctionsLibrary.h"
 
-#define ROOT_DIR_OFFSET(bootSector) ((bootSector->BPB_RsvdSecCnt + bootSector->BPB_NumFATs * bootSector->BPB_FATSz16) * bootSector->BPB_BytsPerSec)
+#define ROOT_DIR_OFFSET(bootSector) (18 /*(bootSector->BPB_RsvdSecCnt + bootSector->BPB_NumFATs * bootSector->BPB_FATSz16) * bootSector->BPB_BytsPerSec*/)
 #define CLUSTER_OFFSET(bootSector, cluster) (((cluster - 2) + 33) * 512)
 
 void setDirectoryEntry(struct DirectoryEntry *entry, const char *filename, uint16_t firstCluster, uint32_t fileSize, struct stat *st) {
@@ -30,7 +31,7 @@ void setDirectoryEntry(struct DirectoryEntry *entry, const char *filename, uint1
 void copyFileToImage(struct BootSector *bootSector, struct DirectoryEntry *rootDir, uint8_t *diskData, const char *filepath, const char *targetDirPath) {
     struct stat st;
     if (stat(filepath, &st) == -1) {
-        perror("stat");
+        perror("Loading stats didn't work");
         return;
     }
 
@@ -41,6 +42,10 @@ void copyFileToImage(struct BootSector *bootSector, struct DirectoryEntry *rootD
     if (freeEntryIndex == -1) {
         printf("No free directory entry found.\n");
         return;
+    }else{
+        if(inTestingMode){
+            printf("Found a free entry at %d\n", freeEntryIndex); 
+        }
     }
 
     // Check available space
@@ -74,7 +79,7 @@ void copyFileToImage(struct BootSector *bootSector, struct DirectoryEntry *rootD
 
     while (fread(buffer, 1, 512, inputFile) > 0) {
         uint32_t clusterOffset = CLUSTER_OFFSET(bootSector, currentCluster);
-        memcpy(diskData + clusterOffset, buffer, CLUSTER_SIZE);
+        memcpy(diskData + clusterOffset, buffer, 512);
         nextCluster = findFreeCluster(diskData + bootSector->BPB_RsvdSecCnt * bootSector->BPB_BytsPerSec, fatSize);
         if (nextCluster == 0xFFFF) {
             printf("Error: disk is full.\n");
@@ -92,6 +97,10 @@ void printUsage() {
 }
 
 int main(int argc, char *argv[]) {
+
+    // inTestingMode =1; 
+
+
     if (argc != 3) {
         printUsage();
         return 1;
@@ -117,20 +126,20 @@ int main(int argc, char *argv[]) {
     uint32_t rootDirSize = bootSector.BPB_RootEntCnt * sizeof(struct DirectoryEntry);
     struct DirectoryEntry *rootDir = malloc(rootDirSize);
     if (!rootDir) {
-        perror("malloc");
+        perror("malloc didn't work");
         fclose(diskImage);
         return 1;
     }
 
     if (fseek(diskImage, rootDirOffset, SEEK_SET) != 0) {
-        perror("fseek");
+        perror("fseek didn't work");
         free(rootDir);
         fclose(diskImage);
         return 1;
     }
 
     if (fread(rootDir, rootDirSize, 1, diskImage) != 1) {
-        perror("fread");
+        perror("fread didn't work");
         free(rootDir);
         fclose(diskImage);
         return 1;

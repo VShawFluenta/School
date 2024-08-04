@@ -3,8 +3,8 @@ CC = gcc
 CFLAGS = -Wall  -std=c99 -g
 
 # Executables
-EXECS = diskinfo disklist diskget # diskput
-TARGET = diskinfo disklist diskget #diskput
+EXECS = diskinfo disklist diskget  diskput
+TARGET = diskinfo disklist diskget diskput
 
 # Object files
 OBJS = diskFunctionsLibrary.o
@@ -26,8 +26,8 @@ disklist: disklist.o $(OBJS)
 diskget: diskget.o $(OBJS)
 	$(CC) $(CFLAGS) diskget.o $(OBJS) -o diskget
 
-# diskput: diskput.o $(OBJS)
-# 	$(CC) $(CFLAGS) diskput.o $(OBJS) -o diskput
+diskput: diskput.o $(OBJS)
+	$(CC) $(CFLAGS) diskput.o $(OBJS) -o diskput
 
 # Compile the source files into object files
 diskinfo.o: diskinfo.c diskFunctionsLibrary.h
@@ -39,8 +39,8 @@ disklist.o: disklist.c diskFunctionsLibrary.h
 diskget.o: diskget.c diskFunctionsLibrary.h
 	$(CC) $(CFLAGS) -c diskget.c -o diskget.o
 
-# diskput.o: diskput.c diskFunctionsLibrary.h
-# 	$(CC) $(CFLAGS) -c diskput.c -o diskput.o
+diskput.o: diskput.c diskFunctionsLibrary.h
+	$(CC) $(CFLAGS) -c diskput.c -o diskput.o
 
 # Clean up the build
 clean:

@@ -6,6 +6,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <time.h>
+#include <sys/stat.h>
 
 #pragma pack(push, 1)
 struct BootSector {
@@ -52,7 +53,7 @@ struct DirectoryEntry {
 extern int inTestingMode;
 
 int checkAvailableSpace(uint8_t *fat, uint32_t fatSize, uint32_t fileSize, uint32_t clusterSize);
-void setDirectoryEntry(struct DirectoryEntry *entry, const char *filename, uint16_t firstCluster, uint32_t fileSize, struct stat *st) ;
+// void setDirectoryEntry(struct DirectoryEntry *entry, const char *filename, uint16_t firstCluster, uint32_t fileSize, struct stat *st) ;
 void writeToFAT(uint8_t *fat, uint16_t cluster, uint16_t value) ;
 uint16_t findFreeCluster(uint8_t *fat, uint32_t fatSize) ;
 int findFreeDirectoryEntry(struct DirectoryEntry *rootDir, uint32_t rootDirSize);

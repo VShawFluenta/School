@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
+#include <sys/stat.h>
 #include <time.h>
 #include <ctype.h>
 
@@ -89,7 +90,7 @@ void getShortFileName(char *fullfilename, char *shortName) {
         }
         shortName[fn]='.';
             if(inTestingMode){
-                printf("Given Extension is is [");
+                printf("Given Extension is [");
             }
             fn ++; 
         for(fe =0; fe < 3 && (fe+fn)< strlen(fullfilename) ; fe++){
@@ -109,7 +110,7 @@ void getShortFileName(char *fullfilename, char *shortName) {
 
 //Finds the index (within the context of the root dir) of the next free entry 
 int findFreeDirectoryEntry(struct DirectoryEntry *rootDir, uint32_t rootDirSize) {
-    for (uint32_t i = 0; i < rootDirSize; i++) {
+    for (uint32_t i = 2; i < rootDirSize; i++) {
         if (rootDir[i].DIR_Name[0] == 0x00 || rootDir[i].DIR_Name[0] == 0xE5) {
             return i;
         }
